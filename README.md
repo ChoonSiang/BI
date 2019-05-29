@@ -560,3 +560,131 @@ OLAP is the technology that enables business users to perform multidimensional a
   - Pentaho Data Integration (Pdi, Kettle)
   - CloverETL
   - Talend
+
+
+
+## SQL Queries
+
+- ```
+  DECLARE @StartDate DATETIME = '01/01/2003' --Starting value of Date Range
+  DECLARE @EndDate DATETIME = '12/31/2005' --End Value of Date Range
+  DECLARE @CurrentDate AS DATETIME = @StartDate
+  WHILE @CurrentDate < @EndDate
+  BEGIN
+  	INSERT INTO [dbo].[Time]
+  	SELECT
+  		DATEPART(YEAR, @CurrentDate) AS Year,
+  		DATEPART(QQ, @CurrentDate) AS Quarter,
+  		DATEPART(MM, @CurrentDate) AS Month,
+  		@CurrentDate AS Date,
+  		DATEPART(DD, @CurrentDate) AS Day,
+  		DATENAME(DW, @CurrentDate) AS DayOfWeek
+  
+  	SET @CurrentDate = DATEADD(DD, 1, @CurrentDate)
+  END
+  ```
+
+- ```
+  INSERT INTO 
+    CA1_DW..employees(employeeNumber,lastName,firstName,extension,email,reportsTo,jobTitle)
+  SELECT 
+     employeeNumber,lastName,firstName,extension,email,reportsTo,jobTitle
+  FROM 
+    CA1_OLTP..Employees
+  ```
+
+- ```
+  BULK INSERT Customers
+  FROM 'F:\Year 3\BI\Assignment\data\Customers.csv'
+  WITH (FORMAT = 'CSV',fieldterminator=',', rowterminator='\n')
+  ```
+
+- ```
+  Declare @Product varchar(max)
+  Select @Product = BulkColumn From OPENROWSET(Bulk 'F:/Year 3/BI/Assignment/data/getProducts.php', SINGLE_BLOB) JSON
+  Insert into Products
+  Select * from OPENJSON(@Product, '$')
+  WITH (
+  productCode varchar(15) '$.productCode',
+  productName varchar(70) '$.productName',
+  productLine varchar(50) '$.productLine',
+  productScale varchar(10) '$.productScale',
+  productVendor varchar(50) '$.productVendor',
+  productDescription varchar(255) '$.productDescription',
+  quantityInStock int '$.quantityInStock',
+  buyPrice float '$.buyPrice',
+  MSRP float '$.MSRP')
+  ```
+
+- ```
+  WITH Top_Vendor_Product AS(
+  SELECT Vendor_Name, Description, SUM(SalesFacts.Price * SalesFacts.Quantity) as [Sales Total],Rank() Over(Partition by Vendor_Name Order by SUM(SalesFacts.Price * SalesFacts.Quantity) desc) as sales_rank
+  FROM Product,Vendor, SalesFacts
+  WHERE Product.Product_Key = SalesFacts.Product_Key AND Vendor.Vendor_Key = SalesFacts.Vendor_Key 
+  Group by [Vendor_Name],[Description]
+  )
+  
+  select * from Top_Vendor_Product where sales_rank=1
+  
+  ```
+
+- ```
+  SELECT Region_Code,
+   SUM(SalesFacts.Price * SalesFacts.Quantity) AS [Sales Total]
+  FROM Region, SalesFacts
+  WHERE Region.Region_Key = SalesFacts.Region_Key
+  GROUP BY [Region_Code]
+  ORDER BY [Sales Total] DESC;
+  ```
+
+- ```
+  INSERT INTO CA1_DW..SalesFacts
+  (customerKey,employeeKey,officeKey,productKey,timeKey,orderKey,quantityOrdered,priceEach)
+      
+  SELECT
+  c.customerKey,
+  e.EmployeeKey,
+   offi.officeKey,
+  p.productKey,
+   t.timeKey,
+   oDW.orderKey,
+   od.quantityOrdered,
+   od.priceEach
+  FROM 
+  CA1_DW..[Orders] oDW INNER JOIN CA1_OLTP..[Orders] o
+  ON oDW.orderNumber = o.orderNumber
+  
+  inner join CA1_OLTP..[OrderDetails] od
+  on oDW.orderNumber=od.orderNumber
+  
+  INNER JOIN CA1_DW..[Time] t
+  ON o.orderDate = t.Date
+  
+  inner join CA1_DW..[Customers] c
+  on c.customerNumber=o.customerNumber
+  
+  inner join CA1_DW..[Products] p
+  on p.productCode=od.productCode
+  
+  
+  inner join 
+  (select [customerNumber],[salesRepEmployeeNumber]
+  from CA1_OLTP..[customers] cOLTP
+  inner join CA1_OLTP..[employees] eOLTP
+  on eOLTP.employeeNumber=cOLTP.salesRepEmployeeNumber) cOLTP
+  on o.customerNumber=cOLTP.customerNumber
+  
+  
+  inner join 
+  (select [employeeNumber],eOLTP.[officeCode]
+  from CA1_OLTP..[Employees] eOLTP
+  inner join CA1_OLTP..[Offices] offOLTP
+  on eOLTP.officeCode=offOLTP.officeCode) eOLTP
+  on eOLTP.employeeNumber=cOLTP.salesRepEmployeeNumber
+  
+  inner join CA1_DW..[employees] e
+  on e.employeeNumber=eOLTP.employeeNumber
+  
+  inner join CA1_DW..[Offices] offi
+  on offi.officeCode=eOLTP.officeCode
+  ```
